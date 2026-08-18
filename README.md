@@ -35,7 +35,7 @@ Este projeto é uma simulação interativa de mesa de bilhar desenvolvida como t
 
 ## Como Usar
 
-Abra `index.html` em qualquer navegador moderno (sem necessidade de servidor).
+Acesse [https://telp.manoel.online](https://telp.manoel.online) ou [https://manoelpiovesan.github.io/telp](https://manoelpiovesan.github.io/telp)
 
 | Entrada | Ação |
 |---|---|
