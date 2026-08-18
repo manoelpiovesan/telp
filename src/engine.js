@@ -1,8 +1,11 @@
 (() => {
   const { addVectors, scaleVector } = window.Telp.vector;
   const { getAllIntersections, rayToTableBounds } = window.Telp.collision;
-  const { stepBalls } = window.Telp.physics;
+  const { stepBalls, predictPath } = window.Telp.physics;
   const { render } = window.Telp.renderer;
+
+  const PREDICT_STEPS  = 120;  // passos de previsão por EDO
+  const PREDICT_DT     = 0.05; // passo de tempo da previsão (s)
 
   function createEngine(state) {
     let lastTimestamp = performance.now();
@@ -18,6 +21,7 @@
       }
 
       updateTrajectoryInfo(state);
+      updateBallPredictions(state);
       render(state);
       state.syncPanel();
       requestAnimationFrame(frame);
@@ -42,6 +46,17 @@
 
     const endDistance = state.firstHit ? state.firstHit.distance : maxDistance;
     state.trajectoryEnd = addVectors(origin, scaleVector(state.cue.direction, endDistance));
+  }
+
+  // Calcula a previsão de trajetória (EDO/RK4) para cada bola em movimento
+  function updateBallPredictions(state) {
+    state.ballPaths = {};
+    for (const ball of state.balls) {
+      const speed = Math.hypot(ball.velocity.x, ball.velocity.y);
+      if (speed > 5) {
+        state.ballPaths[ball.id] = predictPath(ball, state.tableBounds, PREDICT_STEPS, PREDICT_DT);
+      }
+    }
   }
 
   window.Telp.engine = { createEngine, updateTrajectoryInfo };

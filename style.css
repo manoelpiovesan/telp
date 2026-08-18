@@ -89,6 +89,19 @@ body {
   display: none;
 }
 
+.math-block {
+  background: #f0f4ff;
+  border: 1px solid var(--surface-border);
+  color: var(--text);
+  line-height: 1.55;
+  font-size: 0.82rem;
+}
+
+.math-block b {
+  color: var(--accent);
+}
+
+
 @media (min-width: 576px) {
   #tableCanvas {
     height: min(62vh, 620px);
