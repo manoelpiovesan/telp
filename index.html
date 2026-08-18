@@ -78,6 +78,10 @@
                   <th scope="row"><i class="bi bi-calculator me-2"></i>||d||</th>
                   <td class="text-end"><span id="cueDirectionNorm">0.00</span></td>
                 </tr>
+                <tr>
+                  <th scope="row"><i class="bi bi-lightning-fill me-2"></i>Potência</th>
+                  <td class="text-end"><span id="cuePower">600 px/s</span></td>
+                </tr>
                 </tbody>
               </table>
             </div>
@@ -93,6 +97,18 @@
                   <td class="text-end">Aponta o taco</td>
                 </tr>
                 <tr>
+                  <th scope="row"><i class="bi bi-cursor me-2"></i>Clique</th>
+                  <td class="text-end">Tacada (1ª bola)</td>
+                </tr>
+                <tr>
+                  <th scope="row"><i class="bi bi-cursor-fill me-2"></i>Clique dir.</th>
+                  <td class="text-end">Reposicionar taco</td>
+                </tr>
+                <tr>
+                  <th scope="row"><i class="bi bi-mouse me-2"></i>Scroll</th>
+                  <td class="text-end">Ajustar potência</td>
+                </tr>
+                <tr>
                   <th scope="row"><i class="bi bi-pause-circle me-2"></i>Space</th>
                   <td class="text-end">Pausa / continua</td>
                 </tr>
@@ -106,6 +122,25 @@
                 </tr>
                 </tbody>
               </table>
+            </div>
+
+            <h2 class="section-title mt-3">
+              <i class="bi bi-sigma me-2"></i>Matemática
+            </h2>
+            <div class="math-block small font-monospace p-2 rounded">
+              <p class="mb-1 text-info-emphasis">Reta paramétrica:</p>
+              <p class="mb-2">P(t) = O + t · <b>d</b></p>
+
+              <p class="mb-1 text-info-emphasis">Interseção reta–círculo:</p>
+              <p class="mb-1">‖P(t) − C‖² = r²</p>
+              <p class="mb-2">at² + bt + c = 0 &nbsp;|&nbsp; Δ = b²−4ac</p>
+
+              <p class="mb-1 text-info-emphasis">EDO — Atrito viscoso:</p>
+              <p class="mb-1">dv/dt = −k · v</p>
+              <p class="mb-2">v(t) = v₀ · e<sup>−kt</sup></p>
+
+              <p class="mb-1 text-info-emphasis">Integração RK4:</p>
+              <p class="mb-0">y<sub>n+1</sub> = y<sub>n</sub> + h/6·(k₁+2k₂+2k₃+k₄)</p>
             </div>
           </div>
         </div>

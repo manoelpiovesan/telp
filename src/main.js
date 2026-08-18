@@ -20,7 +20,8 @@
     firstHitDistance: document.getElementById("firstHitDistance"),
     cuePosition: document.getElementById("cuePosition"),
     cueDirection: document.getElementById("cueDirection"),
-    cueDirectionNorm: document.getElementById("cueDirectionNorm")
+    cueDirectionNorm: document.getElementById("cueDirectionNorm"),
+    cuePower: document.getElementById("cuePower")
   };
 
   const state = {
@@ -35,9 +36,11 @@
     cue: {
       position: { x: 0, y: 0 },
       direction: { x: 0, y: -1 },
-      length: 90
+      length: 90,
+      power: 600
     },
     balls: [],
+    ballPaths: {},
     intersections: [],
     firstHit: null,
     trajectoryEnd: { x: 0, y: 0 },
@@ -53,6 +56,7 @@
       ui.cuePosition.textContent = formatVector(this.cue.position);
       ui.cueDirection.textContent = formatVector(this.cue.direction);
       ui.cueDirectionNorm.textContent = magnitude(this.cue.direction).toFixed(2);
+      if (ui.cuePower) ui.cuePower.textContent = `${Math.round(this.cue.power)} px/s`;
     },
     reset() {
       this.balls = createBalls(BALL_COUNT, this.tableBounds);
