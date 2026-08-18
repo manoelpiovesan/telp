@@ -1,0 +1,8 @@
+services:
+  telp:
+    build: .
+    container_name: telp
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+
