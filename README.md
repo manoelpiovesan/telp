@@ -4,7 +4,11 @@
 </div>
 
 ---
-
+| Alunos |
+| ------ |
+| Manoel Rodrigues |
+| João Marcello Rocha |
+|João Victor Costa Carneiro|
 ## Sumário
 
 1. [Visão Geral](#visão-geral)
