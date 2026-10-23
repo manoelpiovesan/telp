@@ -95,7 +95,7 @@ body {
 .plot-zero { width: 8px; height: 8px; border-radius: 50%; background: #3b8179; }
 .plot-order0 { width: 8px; height: 8px; border: 1.5px solid #8a6c9f; border-radius: 50%; }
 .plot-euler { width: 8px; height: 8px; border: 1.5px solid #355f84; border-radius: 50%; }
-.error-section { grid-column: 1 / -1; }
+.error-section { grid-area: error; grid-column: auto; }
 .error-plot-frame { height: 190px; overflow: hidden; border: 1px solid #e3e9e6; background: #fff; }
 #errorPlot { display: block; width: 100%; height: 100%; }
 .error-legend { gap: 12px 20px; }
@@ -114,30 +114,36 @@ body {
 .note-card code { color: #315f55; background: #edf3ef; }
 .page-footer { color: #75827d; border-color: #dce3df; }
 
-/* Stack the field, chart and controls in a clear one-column reading order. */
+/* Put a compact control strip above the field, followed by its charts. */
 .workspace {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "simulation" "plot" "controls";
-  gap: 14px;
+  grid-template-areas: "controls" "simulation" "plot" "error";
+  gap: 10px;
 }
-.simulation-column { grid-area: simulation; }
-.plot-section { grid-area: plot; display: flex; flex-direction: column; min-width: 0; margin-top: 0; }
-.plot-frame { flex: none; min-height: 0; height: 290px; }
 .control-panel {
   grid-area: controls;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0 20px;
-  padding: 20px 23px;
+  grid-template-columns: repeat(3, minmax(90px, 1fr)) minmax(110px, 1.1fr) minmax(145px, 1.3fr);
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 14px;
 }
-.panel-heading, .panel-footnote { grid-column: 1 / -1; }
-.control-panel .control-section { min-width: 0; }
-.control-panel .method-section { grid-column: span 2; }
+.panel-heading, .panel-footnote { display: none; }
+.control-panel .control-section { min-width: 0; margin: 0; padding: 0; border: 0; }
+.control-panel .method-section { grid-column: auto; }
+.control-panel .control-title { margin-bottom: 3px; font-size: 10px; }
+.control-panel .range-labels { font-size: 8px; }
+.control-panel .button-row { gap: 5px; }
+.control-panel .small-button { padding: 7px 8px; font-size: 10px; }
+.control-panel .check-row { gap: 5px; font-size: 9px; }
+.simulation-column { grid-area: simulation; }
+.plot-section { grid-area: plot; display: flex; flex-direction: column; min-width: 0; margin-top: 0; }
+.plot-frame { flex: none; min-height: 0; height: 290px; }
 
-@media (max-width: 820px) {
+@media (max-width: 680px) {
   .plot-section { min-height: 390px; }
   .control-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .control-panel .method-section { grid-column: auto; }
+  .control-panel .method-section { grid-column: 1 / -1; }
 }
 
 @media (max-width: 760px) {
@@ -146,7 +152,7 @@ body {
   .plot-caption { max-width: none; text-align: left; }
   .plot-frame { height: 195px; }
   .plot-legend { gap: 9px 14px; font-size: 10px; }
-  .control-panel { grid-template-columns: 1fr 1fr; column-gap: 16px; }
+  .control-panel { column-gap: 12px; padding: 10px; }
 }
 @media (max-width: 480px) {
   .intro h1 { font-size: 32px; line-height: 1.25; }
