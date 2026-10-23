@@ -5,6 +5,8 @@
   const ctx = canvas.getContext('2d');
   const plotCanvas = document.querySelector('#functionPlot');
   const plotCtx = plotCanvas.getContext('2d');
+  const errorCanvas = document.querySelector('#errorPlot');
+  const errorCtx = errorCanvas.getContext('2d');
   const wrap = document.querySelector('#canvasWrap');
   const angleSlider = document.querySelector('#angleSlider');
   const speedSlider = document.querySelector('#speedSlider');
@@ -22,6 +24,9 @@
   let fpsFrames = 0;
   let fpsStamp = previousFrame;
   let predictions = [];
+  let rootHistory = new WeakMap();
+  let errorHistory = [];
+  let simulationTime = 0;
 
   const palette = ['#b65f4a', '#547c9d', '#7d8d58', '#8a6c9f', '#bb8950', '#4e8b83', '#697886', '#b16f78'];
   const seeds = [
@@ -41,6 +46,9 @@
     balls.length = 0;
     seeds.forEach((ball) => addBall(ball.x, ball.y, ball.vx, ball.vy));
     predictions = [];
+    rootHistory = new WeakMap();
+    errorHistory = [];
+    simulationTime = 0;
   }
 
   function direction() {
@@ -71,47 +79,101 @@
     return roots.length ? { hit: true, s: Math.min(...roots) } : { hit: false };
   }
 
-  // Predictor: project the center onto the ray and subtract its radius.
-  // Corrector: Newton iterations solve f(s)=0 for the first forward contact.
-  function newtonIntersection(ball, d, maxS) {
-    const qx = cue.x - ball.x;
-    const qy = cue.y - ball.y;
-    const projection = -(qx * d.x + qy * d.y);
-    const radiusSquared = ball.r * ball.r;
-    let s = Math.max(0, projection - ball.r);
-    let residual = Infinity;
-    const history = [];
-
-    for (let i = 0; i < 20; i++) {
-      const dx = qx + s * d.x;
-      const dy = qy + s * d.y;
-      const f = dx * dx + dy * dy - radiusSquared;
-      const derivative = 2 * (dx * d.x + dy * d.y);
-      residual = Math.abs(f);
-      history.push({ s, f });
-      if (residual < 0.02) return { hit: s <= maxS, s, iterations: i, residual, history };
-      if (Math.abs(derivative) < 1e-8) break;
-      const next = s - f / derivative;
-      if (!Number.isFinite(next) || next < 0 || next > maxS) break;
-      s = next;
-    }
-    const dx = qx + s * d.x;
-    const dy = qy + s * d.y;
-    residual = Math.abs(dx * dx + dy * dy - radiusSquared);
-    if (s >= 0 && s <= maxS && residual < 0.02) return { hit: true, s, iterations: history.length, residual, history };
-    return { hit: false, iterations: history.length, residual, history };
+  function initialGuess(ball, d) {
+    const projection = (ball.x - cue.x) * d.x + (ball.y - cue.y) * d.y;
+    return Math.max(0, projection - ball.r);
   }
 
-  function calculatePredictions() {
+  // Newton corrector: refine a temporal predictor until f(s)=0 (or iteration fails).
+  function newtonCorrector(ball, d, maxS, predictor, predictorKind) {
+    const qx = cue.x - ball.x;
+    const qy = cue.y - ball.y;
+    const radiusSquared = ball.r * ball.r;
+    const f = (s) => {
+      const dx = qx + s * d.x;
+      const dy = qy + s * d.y;
+      return dx * dx + dy * dy - radiusSquared;
+    };
+    const derivative = (s) => 2 * ((qx + s * d.x) * d.x + (qy + s * d.y) * d.y);
+    if (!Number.isFinite(predictor)) {
+      return { hit: false, s: predictor, iterations: 0, residual: Infinity, predictor, history: [] };
+    }
+    const history = [{ s: predictor, f: f(predictor), kind: predictorKind }];
+    if (!Number.isFinite(history[0].f)) {
+      return { hit: false, s: predictor, iterations: 0, residual: Infinity, predictor, history: [] };
+    }
+    let s = predictor;
+    let residual = Math.abs(f(s));
+    if (residual < 0.02) {
+      return { hit: s >= 0 && s <= maxS, s, iterations: 0, residual, predictor, history };
+    }
+
+    let correctors = 0;
+    for (; correctors < 20; correctors++) {
+      const slope = derivative(s);
+      if (Math.abs(slope) < 1e-8) break;
+      const next = s - f(s) / slope;
+      if (!Number.isFinite(next) || next < 0 || next > maxS) break;
+      s = next;
+      residual = Math.abs(f(s));
+      history.push({ s, f: f(s), kind: 'newton' });
+      if (residual < 0.02) {
+        correctors += 1;
+        return { hit: s >= 0 && s <= maxS, s, iterations: correctors, residual, predictor, history };
+      }
+    }
+    return { hit: false, iterations: correctors, residual, predictor, history };
+  }
+
+  function calculatePredictions(dt = 0, advanceHistory = false) {
     const d = direction();
     const maxS = rayLength(d);
     predictions = balls.map((ball, index) => {
       const exact = exactIntersection(ball, d, maxS);
-      const numeric = newtonIntersection(ball, d, maxS);
+      const previous = rootHistory.get(ball);
+      const fallback = initialGuess(ball, d);
+      const order0Predictor = previous?.order0.s ?? fallback;
+      const eulerState = previous?.euler;
+      const eulerPredictor = eulerState
+        ? eulerState.s + (eulerState.previousS !== null && eulerState.sampleDt > 0
+          ? (eulerState.s - eulerState.previousS) * dt / eulerState.sampleDt
+          : 0)
+        : fallback;
+      const order0 = newtonCorrector(ball, d, maxS, order0Predictor, 'order0');
+      const euler = newtonCorrector(ball, d, maxS, eulerPredictor, 'euler');
       const exactPoint = exact.hit ? { x: cue.x + d.x * exact.s, y: cue.y + d.y * exact.s } : null;
-      const numericPoint = numeric.hit ? { x: cue.x + d.x * numeric.s, y: cue.y + d.y * numeric.s } : null;
-      return { index, ball, exact, numeric, exactPoint, numericPoint };
+      const order0Point = order0.hit ? { x: cue.x + d.x * order0.s, y: cue.y + d.y * order0.s } : null;
+      const eulerPoint = euler.hit ? { x: cue.x + d.x * euler.s, y: cue.y + d.y * euler.s } : null;
+      if (advanceHistory && dt > 0 && exact.hit && order0.hit && euler.hit) {
+        rootHistory.set(ball, {
+          order0: {
+            s: order0.s,
+            previousS: previous?.order0.s ?? null,
+            sampleDt: dt,
+          },
+          euler: {
+            s: euler.s,
+            previousS: eulerState?.s ?? null,
+            sampleDt: dt,
+          },
+        });
+      } else if (advanceHistory && dt > 0 && (!exact.hit || !order0.hit || !euler.hit)) {
+        rootHistory.delete(ball);
+      }
+      return { index, ball, exact, order0, euler, exactPoint, order0Point, eulerPoint };
     });
+    if (advanceHistory && dt > 0) {
+      simulationTime += dt;
+      const target = firstHit('exact');
+      errorHistory.push({
+        time: simulationTime,
+        order0Predictor: target ? Math.abs(target.order0.predictor - target.exact.s) : null,
+        order0Corrected: target?.order0.hit ? Math.abs(target.order0.s - target.exact.s) : null,
+        eulerPredictor: target ? Math.abs(target.euler.predictor - target.exact.s) : null,
+        eulerCorrected: target?.euler.hit ? Math.abs(target.euler.s - target.exact.s) : null,
+      });
+      if (errorHistory.length > 240) errorHistory.shift();
+    }
     updateMetrics();
   }
 
@@ -121,16 +183,18 @@
 
   function updateMetrics() {
     const exact = firstHit('exact');
-    const numeric = firstHit('numeric');
+    const order0 = firstHit('order0');
+    const euler = firstHit('euler');
     document.querySelector('#exactMetric').textContent = exact ? `${exact.exact.s.toFixed(1)} px` : '—';
     document.querySelector('#exactDetail').textContent = exact ? `Partícula ${String(exact.index + 1).padStart(2, '0')} · primeira raiz positiva` : 'Nenhuma interseção no raio';
-    document.querySelector('#newtonMetric').textContent = numeric ? `${numeric.numeric.s.toFixed(1)} px` : '—';
-    document.querySelector('#newtonDetail').textContent = numeric ? `Partícula ${String(numeric.index + 1).padStart(2, '0')} · ${numeric.numeric.iterations} iterações · resíduo ${numeric.numeric.residual.toFixed(2)}` : 'Newton não convergiu para uma raiz';
-    const error = exact && numeric && exact.index === numeric.index
-      ? Math.hypot(exact.exactPoint.x - numeric.numericPoint.x, exact.exactPoint.y - numeric.numericPoint.y)
-      : null;
-    document.querySelector('#errorMetric').textContent = error === null ? '—' : `${error.toFixed(2)} px`;
-    document.querySelector('#errorDetail').textContent = error === null ? 'Compare quando ambos identificarem a mesma partícula' : `Diferença entre previsões · partícula ${String(exact.index + 1).padStart(2, '0')}`;
+    document.querySelector('#newtonMetric').textContent = order0 ? `${order0.order0.s.toFixed(1)} px` : '—';
+    document.querySelector('#newtonDetail').textContent = order0
+      ? `P.${String(order0.index + 1).padStart(2, '0')} · prev. ${order0.order0.predictor.toFixed(1)} px · ${order0.order0.iterations} corr.`
+      : 'Preditor O(0) + Newton sem convergência';
+    document.querySelector('#errorMetric').textContent = euler ? `${euler.euler.s.toFixed(1)} px` : '—';
+    document.querySelector('#errorDetail').textContent = euler
+      ? `P.${String(euler.index + 1).padStart(2, '0')} · prev. ${euler.euler.predictor.toFixed(1)} px · ${euler.euler.iterations} corr.`
+      : 'Preditor Euler + Newton sem convergência';
   }
 
   function resizeCanvas() {
@@ -140,6 +204,7 @@
     canvas.height = Math.round(rect.height * dpr);
     ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
     resizePlot();
+    resizeErrorPlot();
     draw();
   }
 
@@ -149,6 +214,14 @@
     plotCanvas.width = Math.round(rect.width * dpr);
     plotCanvas.height = Math.round(rect.height * dpr);
     plotCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function resizeErrorPlot() {
+    const rect = errorCanvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    errorCanvas.width = Math.round(rect.width * dpr);
+    errorCanvas.height = Math.round(rect.height * dpr);
+    errorCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function drawTable() {
@@ -228,10 +301,15 @@
     const showExact = document.querySelector('#showExact').checked;
     const showNewton = document.querySelector('#showNewton').checked;
     const firstExact = firstHit('exact');
-    const firstNewton = firstHit('numeric');
-    if (showExact && showNewton && firstExact && firstNewton && firstExact.index === firstNewton.index) {
-      ctx.save(); ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(71,91,105,.55)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(firstExact.exactPoint.x, firstExact.exactPoint.y); ctx.lineTo(firstNewton.numericPoint.x, firstNewton.numericPoint.y); ctx.stroke(); ctx.restore();
+    const firstOrder0 = firstHit('order0');
+    const firstEuler = firstHit('euler');
+    if (showExact && showNewton && firstExact && firstOrder0 && firstExact.index === firstOrder0.index) {
+      ctx.save(); ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(138,108,159,.55)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(firstExact.exactPoint.x, firstExact.exactPoint.y); ctx.lineTo(firstOrder0.order0Point.x, firstOrder0.order0Point.y); ctx.stroke(); ctx.restore();
+    }
+    if (showExact && showNewton && firstExact && firstEuler && firstExact.index === firstEuler.index) {
+      ctx.save(); ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(53,95,132,.55)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(firstExact.exactPoint.x, firstExact.exactPoint.y); ctx.lineTo(firstEuler.eulerPoint.x, firstEuler.eulerPoint.y); ctx.stroke(); ctx.restore();
     }
     if (showExact) predictions.forEach((p) => {
       if (!p.exact.hit) return;
@@ -241,12 +319,18 @@
       if (p === firstExact) drawTag(point.x + 10, point.y - 13, 'DIRETO', '#3b8179');
     });
     if (showNewton) predictions.forEach((p) => {
-      if (!p.numeric.hit) return;
-      const point = p.numericPoint;
+      if (p.order0.hit) {
+        const point = p.order0Point;
+        ctx.beginPath(); ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+        ctx.strokeStyle = '#8a6c9f'; ctx.lineWidth = 2; ctx.stroke();
+        if (p === firstOrder0) drawTag(point.x + 10, point.y - 31, 'O(0)', '#8a6c9f');
+      }
+      if (!p.euler.hit) return;
+      const point = p.eulerPoint;
       ctx.save(); ctx.translate(point.x, point.y); ctx.rotate(Math.PI / 4);
-      ctx.strokeStyle = '#bc654f'; ctx.lineWidth = 2; ctx.strokeRect(-5, -5, 10, 10);
+      ctx.strokeStyle = '#355f84'; ctx.lineWidth = 2; ctx.strokeRect(-5, -5, 10, 10);
       ctx.restore();
-      if (p === firstNewton) drawTag(point.x + 10, point.y + 13, 'NEWTON', '#bc654f');
+      if (p === firstEuler) drawTag(point.x + 10, point.y + 30, 'EULER', '#355f84');
     });
   }
 
@@ -270,6 +354,7 @@
     balls.forEach(drawBall);
     drawPredictions();
     drawFunctionPlot();
+    drawErrorPlot();
   }
 
   function drawFunctionPlot() {
@@ -360,25 +445,93 @@
       plotCtx.beginPath(); plotCtx.arc(x, zeroY, 5, 0, Math.PI * 2); plotCtx.fillStyle = '#3b8179'; plotCtx.fill();
     }
 
-    const history = selected.numeric.history || [];
-    if (history.length) {
-      plotCtx.save(); plotCtx.setLineDash([3, 3]); plotCtx.strokeStyle = '#bd684f'; plotCtx.lineWidth = 1.2;
+    [
+      { result: selected.order0, color: '#8a6c9f' },
+      { result: selected.euler, color: '#355f84' },
+    ].forEach(({ result, color }) => {
+      if (!result.history.length) return;
+      plotCtx.save(); plotCtx.setLineDash([3, 3]); plotCtx.strokeStyle = color; plotCtx.lineWidth = 1.2;
       plotCtx.beginPath();
-      history.forEach((point, i) => i ? plotCtx.lineTo(px(point.s), py(point.f)) : plotCtx.moveTo(px(point.s), py(point.f)));
+      result.history.forEach((point, i) => i ? plotCtx.lineTo(px(point.s), py(point.f)) : plotCtx.moveTo(px(point.s), py(point.f)));
       plotCtx.stroke(); plotCtx.restore();
-      history.forEach((point, i) => {
-        plotCtx.beginPath(); plotCtx.arc(px(point.s), py(point.f), i === history.length - 1 ? 4.2 : 3, 0, Math.PI * 2);
-        plotCtx.fillStyle = i === history.length - 1 ? '#bd684f' : '#fff';
-        plotCtx.fill(); plotCtx.strokeStyle = '#bd684f'; plotCtx.lineWidth = 1.5; plotCtx.stroke();
+      result.history.forEach((point, i) => {
+        const isPredictor = i === 0;
+        plotCtx.beginPath(); plotCtx.arc(px(point.s), py(point.f), i === result.history.length - 1 ? 4.2 : 3, 0, Math.PI * 2);
+        plotCtx.fillStyle = isPredictor ? '#fff' : (i === result.history.length - 1 ? color : '#fff');
+        plotCtx.fill(); plotCtx.strokeStyle = color; plotCtx.lineWidth = 1.5; plotCtx.stroke();
       });
-    }
+    });
 
     plotCtx.fillStyle = '#52645e'; plotCtx.textAlign = 'left'; plotCtx.textBaseline = 'alphabetic';
     plotCtx.font = '10px "DM Mono", monospace';
     plotCtx.textAlign = 'right'; plotCtx.fillText('s (px)', width - right, height - 5);
     const directLabel = selected.exact.hit ? `direto s = ${selected.exact.s.toFixed(2)}` : 'sem interseção direta';
-    const approxLabel = selected.numeric.hit ? `aprox. s = ${selected.numeric.s.toFixed(2)}` : `aprox. não convergiu · resíduo ${selected.numeric.residual.toFixed(1)}`;
-    document.querySelector('#plotCaption').textContent = `Partícula ${String(selected.index + 1).padStart(2, '0')} · ${directLabel} · ${approxLabel}`;
+    const order0Label = selected.order0.hit ? `O(0)+Newton ${selected.order0.s.toFixed(2)}` : 'O(0)+Newton sem convergência';
+    const eulerLabel = selected.euler.hit ? `Euler+Newton ${selected.euler.s.toFixed(2)}` : 'Euler+Newton sem convergência';
+    document.querySelector('#plotCaption').textContent = `Partícula ${String(selected.index + 1).padStart(2, '0')} · ${directLabel} · ${order0Label} · ${eulerLabel}`;
+  }
+
+  function drawErrorPlot() {
+    const rect = errorCanvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    if (!width || !height) return;
+    errorCtx.clearRect(0, 0, width, height);
+    errorCtx.fillStyle = '#fff'; errorCtx.fillRect(0, 0, width, height);
+    const samples = errorHistory.slice(-240);
+    const hasError = samples.some((sample) => [sample.order0Predictor, sample.order0Corrected, sample.eulerPredictor, sample.eulerCorrected].some(Number.isFinite));
+    if (samples.length < 2 || !hasError) {
+      errorCtx.fillStyle = '#74817d'; errorCtx.font = '12px "DM Sans", sans-serif';
+      errorCtx.fillText('Os erros serão registrados quando houver uma interseção.', 20, 30);
+      return;
+    }
+
+    const left = 58, right = 18, top = 15, bottom = 29;
+    const plotWidth = Math.max(1, width - left - right);
+    const plotHeight = Math.max(1, height - top - bottom);
+    const series = [
+      { key: 'order0Predictor', color: '#8a6c9f', dashed: true },
+      { key: 'order0Corrected', color: '#8a6c9f', dashed: false },
+      { key: 'eulerPredictor', color: '#355f84', dashed: true },
+      { key: 'eulerCorrected', color: '#355f84', dashed: false },
+    ];
+    const errors = samples.flatMap((sample) => series.map(({ key }) => sample[key]).filter(Number.isFinite));
+    const maxError = Math.max(...errors, 0.1) * 1.1;
+    const minTime = samples[0].time;
+    const maxTime = Math.max(samples[samples.length - 1].time, minTime + 1e-6);
+    const x = (time) => left + (time - minTime) / (maxTime - minTime) * plotWidth;
+    const y = (error) => top + (1 - error / maxError) * plotHeight;
+
+    errorCtx.font = '10px "DM Mono", monospace'; errorCtx.textAlign = 'right'; errorCtx.textBaseline = 'middle';
+    for (let i = 0; i <= 4; i++) {
+      const value = maxError * i / 4;
+      const yy = y(value);
+      errorCtx.strokeStyle = '#e9eeeb'; errorCtx.lineWidth = 1;
+      errorCtx.beginPath(); errorCtx.moveTo(left, yy); errorCtx.lineTo(width - right, yy); errorCtx.stroke();
+      errorCtx.fillStyle = '#76837f'; errorCtx.fillText(value.toFixed(2), left - 8, yy);
+    }
+    errorCtx.textAlign = 'center'; errorCtx.textBaseline = 'top';
+    for (let i = 0; i <= 4; i++) {
+      const time = minTime + (maxTime - minTime) * i / 4;
+      const xx = x(time);
+      errorCtx.strokeStyle = '#eff2f0'; errorCtx.beginPath(); errorCtx.moveTo(xx, top); errorCtx.lineTo(xx, top + plotHeight); errorCtx.stroke();
+      errorCtx.fillStyle = '#76837f'; errorCtx.fillText(`${time.toFixed(1)} s`, xx, top + plotHeight + 7);
+    }
+    series.forEach(({ key, color, dashed }) => {
+      errorCtx.save(); errorCtx.strokeStyle = color; errorCtx.lineWidth = dashed ? 1.4 : 2;
+      errorCtx.setLineDash(dashed ? [5, 4] : []); errorCtx.beginPath();
+      let started = false;
+      samples.forEach((sample) => {
+        if (!Number.isFinite(sample[key])) { started = false; return; }
+        if (started) errorCtx.lineTo(x(sample.time), y(sample[key]));
+        else { errorCtx.moveTo(x(sample.time), y(sample[key])); started = true; }
+      });
+      errorCtx.stroke(); errorCtx.restore();
+    });
+    errorCtx.fillStyle = '#52645e'; errorCtx.font = '10px "DM Mono", monospace';
+    errorCtx.textAlign = 'right'; errorCtx.textBaseline = 'alphabetic'; errorCtx.fillText('tempo (s)', width - right, height - 4);
+    errorCtx.save(); errorCtx.translate(12, top + plotHeight / 2); errorCtx.rotate(-Math.PI / 2);
+    errorCtx.textAlign = 'center'; errorCtx.fillText('erro absoluto (px)', 0, 0); errorCtx.restore();
   }
 
   function update(dt) {
@@ -395,8 +548,13 @@
   function frame(now) {
     const dt = Math.min((now - previousFrame) / 1000, 0.04);
     previousFrame = now;
-    if (!paused) update(dt * timeScale);
-    calculatePredictions();
+    if (!paused) {
+      const simulationDt = dt * timeScale;
+      update(simulationDt);
+      calculatePredictions(simulationDt, true);
+    } else {
+      calculatePredictions();
+    }
     draw();
     fpsFrames += 1;
     if (now - fpsStamp >= 500) {

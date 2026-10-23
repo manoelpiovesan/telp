@@ -1,6 +1,6 @@
-# Análise da interseção: cálculo direto e aproximação de Newton
+# Análise da interseção: referência analítica, preditores temporais e corretor de Newton
 
-Este documento explica o modelo matemático da visualização, a comparação entre os métodos e a interpretação das métricas e do gráfico. A simulação é uma ferramenta didática: as posições mudam com o tempo, mas os cálculos de interseção são refeitos para a configuração atual a cada quadro.
+Este documento explica o modelo matemático da visualização, a comparação entre os métodos e a interpretação das métricas e dos gráficos. A simulação é uma ferramenta didática: a cada quadro, dois preditores temporais estimam a interseção e Newton corrige as estimativas para a configuração atual; uma solução analítica serve de referência.
 
 ## 1. O problema geométrico
 
@@ -52,27 +52,48 @@ O cálculo direto mantém as raízes que pertencem ao raio (`0 ≤ s ≤ s_max`)
 
 Se o raio for tangente ao círculo, as duas raízes coincidem. Se a origem estiver dentro de um círculo, a raiz não negativa pode representar a saída do círculo, não uma entrada. Na configuração usual, a origem fica fora das partículas.
 
-## 3. Método II — aproximação de Newton–Raphson
+## 3. Métodos numéricos — preditores e corretor de Newton
 
-Newton começa com uma estimativa `s₀` e a corrige repetidamente usando a função e sua derivada:
+Para aproveitar a continuidade temporal, a simulação guarda as últimas raízes corrigidas de cada partícula que cruza o raio. No primeiro quadro (ou quando não há uma raiz anterior válida), os dois métodos começam pela estimativa geométrica da projeção do centro:
 
 ```text
-sₙ₊₁ = sₙ − f(sₙ) / f′(sₙ)
+s_geom = max(0, (c − o)·d − r)
 ```
 
-Para a função de contato deste modelo,
+### Preditor de ordem zero
+
+O preditor de ordem zero supõe que a raiz não mudou desde o quadro anterior:
+
+```text
+s⁽⁰⁾ₙ₊₁ = sₙ
+```
+
+### Preditor de Euler de primeira ordem
+
+O preditor de Euler estima a taxa de variação de `s` usando as duas raízes corrigidas mais recentes e avança essa taxa pelo intervalo atual `Δt`:
+
+```text
+ds/dt ≈ (sₙ − sₙ₋₁) / Δtₙ
+sᴱₙ₊₁ = sₙ + Δtₙ₊₁ · (sₙ − sₙ₋₁) / Δtₙ
+```
+
+Se ainda não há duas raízes anteriores, Euler usa o preditor de ordem zero até que haja histórico suficiente.
+
+### Corretor de Newton
+
+Cada preditor é corrigido separadamente para resolver `f(s)=0` na geometria atual. A correção usa a função e sua derivada:
+
+```text
+sₖ₊₁ = sₖ − f(sₖ) / f′(sₖ)
+```
+
+Para a função de contato deste modelo, a derivada é
 
 ```text
 f′(s) = 2(o + s·d − c)·d
 ```
 
-A estimativa inicial usada pela simulação é a projeção do centro da partícula no raio, menos o raio da partícula, limitada a zero:
-
-```text
-s₀ = max(0, (c − o)·d − r)
-```
-
-Essa estimativa funciona como ponto de partida; não é, em geral, a raiz exata. A cada iteração, Newton usa a inclinação local de `f` para tentar aproximar a raiz.
+Newton usa a inclinação local de `f` para refinar cada predição até o resíduo ficar abaixo da tolerância ou até ocorrer uma condição de falha.
 
 ### Exemplo numérico
 
@@ -85,9 +106,9 @@ s = 100 − √(18² − 5²)
   ≈ 82,709 px
 ```
 
-Newton começa em `s₀ = 100 − 18 = 82 px`. Nesse ponto, `f(82) = 25 px²` e `f′(82) = −36 px`. A primeira correção resulta em aproximadamente `s₁ = 82,694 px`; as seguintes refinam a estimativa até ela ficar muito próxima de `82,709 px`.
+No primeiro quadro, use a estimativa geométrica `s_geom = 100 − 18 = 82 px`. Como ainda não há histórico, os dois preditores começam nesse valor. Nesse ponto, `f(82) = 25 px²` e `f′(82) = −36 px`; as correções de Newton refinam a estimativa até ela ficar muito próxima da raiz analítica `82,709 px`. Nos quadros seguintes, os preditores partem das raízes corrigidas anteriores.
 
-Na implementação, o processo tem limite de 20 iterações. Ele para quando o resíduo `|f(s)|` fica abaixo de `0,02 px²`, quando a derivada é muito pequena ou quando o próximo passo sai do intervalo permitido. Se isso ocorrer antes de atingir o critério de parada, Newton é reportado como não convergido para aquela interseção.
+Na implementação, cada corretor tem limite de 20 iterações. Ele para quando o resíduo `|f(s)|` fica abaixo de `0,02 px²`, quando a derivada é muito pequena ou quando o próximo passo sai do intervalo permitido. Se isso ocorrer antes de atingir o critério de parada, aquele preditor é reportado como não convergido.
 
 ## 4. Como ler os resultados
 
@@ -97,7 +118,7 @@ Na implementação, o processo tem limite de 20 iterações. Ele para quando o r
 - **Linha tracejada**: caminho em que a interseção é procurada.
 - **Círculos numerados**: partículas móveis.
 - **Marcador verde**: interseção do cálculo direto.
-- **Marcador laranja**: resultado da aproximação de Newton.
+- **Marcadores roxo e azul**: raízes corrigidas por Newton após os preditores de ordem zero e Euler.
 
 Quando os dois marcadores aparecem quase sobrepostos, os métodos encontraram praticamente o mesmo ponto. O ângulo do raio e as posições das partículas podem ser alterados; as interseções são recalculadas durante a animação.
 
@@ -106,12 +127,12 @@ Quando os dois marcadores aparecem quase sobrepostos, os métodos encontraram pr
 | Métrica | Interpretação |
 | --- | --- |
 | **Cálculo direto** | Valor de `s` para a primeira interseção analítica encontrada no raio. |
-| **Aproximação** | Valor de `s` produzido por Newton para a primeira interseção numérica encontrada. O detalhe também informa a partícula, a contagem reportada de iterações e o resíduo. |
-| **Diferença entre métodos** | Distância entre os pontos de contato calculados, exibida apenas quando os métodos identificam a mesma partícula. |
+| **Preditor ordem 0 + Newton** | Raiz corrigida após manter o último valor de `s` como predição. |
+| **Preditor Euler + Newton** | Raiz corrigida após extrapolar a variação temporal de `s`. |
 
-Como os pontos comparados estão na mesma direção e `d` é unitário, essa distância é equivalente a `|s_direto − s_Newton|`. Os valores são arredondados na tela; por isso, uma diferença exibida como `0,00 px` pode ser pequena, mas não necessariamente zero exato.
+O gráfico de erro exibe, para a primeira interseção analítica de cada quadro, o erro absoluto `|s_pred − s_direto|` antes da correção e `|s_corrigido − s_direto|` depois dela. Como `d` é unitário, esses erros em `s` também são erros espaciais em pixels. Linhas tracejadas são as predições; linhas contínuas são os resultados corrigidos. O histórico mostra até 240 quadros recentes. Se não houver interseção analítica ou um método não convergir, a série correspondente fica interrompida.
 
-Os métodos escolhem suas primeiras interseções de forma independente. Em alguns casos, um método pode não convergir ou pode selecionar outra partícula. Nessa situação, a diferença entre pontos não é apresentada, pois comparar alvos diferentes não seria uma medida válida do erro de aproximação.
+Os cartões de ordem zero e Euler selecionam sua primeira interseção numérica independentemente; ela pode ser uma partícula diferente da primeira raiz analítica. O gráfico de erro evita essa comparação entre alvos: ambos os métodos são avaliados contra a mesma partícula selecionada pela referência analítica.
 
 ### No gráfico de convergência
 
@@ -122,7 +143,7 @@ O gráfico mostra a função de contato `f(s)` para uma partícula e para a conf
 - **Curva azul**: valor da função conforme `s` aumenta. A curva é quadrática.
 - **Linha horizontal `f(s) = 0`**: nível em que ocorre contato com a circunferência.
 - **Linha e ponto verdes**: primeira raiz direta daquela partícula, quando existe.
-- **Marcadores laranja**: posições sucessivas avaliadas por Newton sobre a curva; o preenchido é a última estimativa.
+- **Marcadores roxos e azuis**: predições e correções sucessivas de Newton para os dois métodos; o preenchido é a última estimativa.
 
 O cruzamento da curva com `f(s) = 0` representa uma interseção. Em uma passagem completa pelo círculo, a parábola pode cruzar esse nível duas vezes: entrada e saída. O marcador verde destaca a primeira raiz válida no sentido do raio.
 
@@ -133,19 +154,19 @@ O gráfico é atualizado com a posição atual das partículas; **não é um his
 1. **Partículas circulares e raio retilíneo.** A forma e o caminho são simplificados para permitir uma equação quadrática.
 2. **Sem colisões entre partículas.** Cada partícula se move e rebate nos limites do campo, mas não interage com as demais.
 3. **Unidades da visualização.** O campo é desenhado em coordenadas de canvas; as distâncias de contato aparecem em pixels. Os rótulos dos eixos do campo são uma escala visual simplificada.
-4. **Newton não é garantido em todos os casos.** Tangências, derivadas próximas de zero, passos fora do raio ou estimativas iniciais inadequadas podem impedir a convergência.
-5. **Tolerância numérica.** O resíduo é medido em `px²`, enquanto as distâncias e a diferença entre pontos são exibidas em `px`; são grandezas diferentes.
+4. **Newton não é garantido em todos os casos.** Tangências, derivadas próximas de zero, passos fora do raio ou predições temporais inadequadas podem impedir a convergência.
+5. **Tolerância numérica.** O resíduo é medido em `px²`, enquanto as distâncias e os erros são exibidos em `px`; são grandezas diferentes.
 6. **Raio configurável.** O slider altera o raio geométrico das partículas existentes e das adicionadas. Mudar o raio também altera a própria equação de contato e, portanto, os resultados dos dois métodos.
 
 ## 6. Roteiro de exploração
 
 1. Pause a animação para observar uma configuração fixa.
 2. Use o ângulo do raio até encontrar uma partícula e observe os marcadores no campo.
-3. Compare os valores de `s` do cálculo direto e de Newton e confira o resíduo e a diferença.
-4. No gráfico, acompanhe os marcadores laranja em direção ao nível `f(s) = 0` e compare a estimativa final com a raiz verde.
+3. Compare o cálculo direto com as raízes corrigidas dos preditores de ordem zero e Euler.
+4. Nos gráficos, acompanhe as correções de Newton em direção a `f(s) = 0` e compare o erro antes e depois da correção.
 5. Aumente ou reduza o raio da partícula. Observe como mudam a curva, a interseção e o resultado numérico.
 6. Experimente uma tangência ou uma direção sem interseção para observar quando Newton deixa de convergir.
 
 ## 7. Resumo
 
-O cálculo direto fornece uma solução analítica da interseção reta–círculo e serve como referência. Newton–Raphson aproxima uma raiz por correções sucessivas. A visualização compara ambos para a mesma geometria e apresenta três sinais complementares: a distância de contato, o resíduo do método numérico e a diferença espacial entre os pontos previstos.
+O cálculo direto fornece uma solução analítica da interseção reta–círculo e serve como referência. Os preditores de ordem zero e Euler estimam a raiz a partir do histórico temporal; Newton corrige cada estimativa para a geometria atual. A visualização compara os resultados e plota os erros antes e depois da correção.

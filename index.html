@@ -23,7 +23,7 @@
       <div>
         <p class="eyebrow">ESTUDO COMPARATIVO · MÉTODOS NUMÉRICOS</p>
         <h1>Cálculo direto<br class="mobile-break"> vs. aproximação<span class="title-period">.</span></h1>
-        <p class="intro-copy">Compare a interseção calculada diretamente pela solução analítica com a estimativa iterativa de Newton–Raphson. Observe a convergência e o erro entre os resultados.</p>
+        <p class="intro-copy">Compare a interseção analítica com Newton corrigindo dois preditores: ordem zero e Euler de primeira ordem. Acompanhe também o erro de cada etapa.</p>
       </div>
         <div class="intro-stamp"><span class="stamp-icon">01</span><span>FIGURA<br>INTERATIVA</span></div>
     </section>
@@ -49,7 +49,8 @@
             <span><i class="legend-vector"></i>Vetor do taco (d)</span>
             <span><i class="legend-line"></i>Raio de busca</span>
             <span><i class="legend-dot legend-exact"></i>Raiz analítica</span>
-            <span><i class="legend-dot legend-newton"></i>Newton–Raphson</span>
+            <span><i class="legend-dot legend-order0"></i>Ordem 0 + Newton</span>
+            <span><i class="legend-dot legend-euler"></i>Euler + Newton</span>
           </div>
           <span class="board-note">EIXOS EM UNIDADES ARBITRÁRIAS · SEM INTERAÇÃO ENTRE PARTÍCULAS</span>
         </div>
@@ -60,22 +61,22 @@
             <div class="metric-detail" id="exactDetail">Aguardando interseção no campo</div>
           </article>
           <article class="metric-card newton-card">
-            <div class="metric-heading"><span class="metric-icon">II</span><span>APROXIMAÇÃO</span><span class="metric-badge numeric-badge">NEWTON</span></div>
-            <div class="metric-main"><strong id="newtonMetric">—</strong><span>estimativa de s</span></div>
+            <div class="metric-heading"><span class="metric-icon">II</span><span>PREDITOR ORDEM 0</span><span class="metric-badge numeric-badge">+ NEWTON</span></div>
+            <div class="metric-main"><strong id="newtonMetric">—</strong><span>raiz corrigida s</span></div>
             <div class="metric-detail" id="newtonDetail">Aguardando convergência</div>
           </article>
           <article class="metric-card error-card">
-            <div class="metric-heading"><span class="metric-icon">Δ</span><span>DIFERENÇA ENTRE MÉTODOS</span></div>
-            <div class="metric-main"><strong id="errorMetric">—</strong><span>diferença espacial</span></div>
-            <div class="metric-detail" id="errorDetail">Calculado no ponto de contato</div>
+            <div class="metric-heading"><span class="metric-icon">III</span><span>PREDITOR EULER · 1ª ORDEM</span><span class="metric-badge numeric-badge">+ NEWTON</span></div>
+            <div class="metric-main"><strong id="errorMetric">—</strong><span>raiz corrigida s</span></div>
+            <div class="metric-detail" id="errorDetail">Aguardando interseção</div>
           </article>
         </div>
       </div>
 
       <section class="plot-section" aria-labelledby="plotTitle">
-        <div class="plot-heading"><div><p class="eyebrow">COMPORTAMENTO DA APROXIMAÇÃO</p><h2 id="plotTitle">Convergência para a interseção</h2></div><p class="plot-caption" id="plotCaption">Os marcadores mostram cada estimativa de Newton sobre f(s).</p></div>
+        <div class="plot-heading"><div><p class="eyebrow">PREDIÇÃO E CORREÇÃO</p><h2 id="plotTitle">Convergência para a interseção</h2></div><p class="plot-caption" id="plotCaption">O gráfico mostra os preditores de ordem zero e Euler e suas correções de Newton.</p></div>
         <div class="plot-frame"><canvas id="functionPlot" aria-label="Gráfico da função de contato em função da distância ao longo do raio."></canvas></div>
-        <div class="plot-legend"><span><i class="plot-line"></i>Função de contato f(s)</span><span><i class="plot-zero"></i>Interseção direta · f(s) = 0</span><span><i class="plot-iteration"></i>Estimativas sucessivas</span></div>
+        <div class="plot-legend"><span><i class="plot-line"></i>Função de contato f(s)</span><span><i class="plot-zero"></i>Raiz analítica</span><span><i class="plot-order0"></i>Preditor O(0) + correções Newton</span><span><i class="plot-euler"></i>Preditor Euler + correções Newton</span></div>
       </section>
 
       <aside class="control-panel">
@@ -105,18 +106,23 @@
         <div class="control-section method-section">
           <div class="control-title"><span>Visualização do método</span></div>
           <label class="check-row"><input type="checkbox" id="showExact" checked><span class="custom-check"></span><i class="check-swatch exact-swatch"></i><span>Raiz analítica</span></label>
-          <label class="check-row"><input type="checkbox" id="showNewton" checked><span class="custom-check"></span><i class="check-swatch newton-swatch"></i><span>Iteração de Newton</span></label>
+          <label class="check-row"><input type="checkbox" id="showNewton" checked><span class="custom-check"></span><i class="check-swatch newton-swatch"></i><span>Preditores O(0)/Euler + Newton</span></label>
         </div>
-        <div class="panel-footnote"><span class="info-mark">i</span><p>A cada quadro, as raízes são recalculadas a partir das posições atuais das partículas.</p></div>
+        <div class="panel-footnote"><span class="info-mark">i</span><p>O(0) mantém a última raiz; Euler extrapola a variação entre quadros. Newton corrige ambos.</p></div>
       </aside>
+      <section class="plot-section error-section" aria-labelledby="errorPlotTitle">
+        <div class="plot-heading"><div><p class="eyebrow">ERRO AO LONGO DO TEMPO</p><h2 id="errorPlotTitle">Erro dos preditores e dos corretores</h2></div><p class="plot-caption">Erro absoluto em relação à raiz analítica da primeira interseção, em pixels.</p></div>
+        <div class="error-plot-frame"><canvas id="errorPlot" aria-label="Gráfico temporal do erro absoluto dos preditores e das correções de Newton em relação à interseção analítica."></canvas></div>
+        <div class="plot-legend error-legend"><span><i class="error-swatch order0 dashed"></i>O(0) preditor</span><span><i class="error-swatch order0"></i>O(0) + Newton</span><span><i class="error-swatch euler dashed"></i>Euler preditor</span><span><i class="error-swatch euler"></i>Euler + Newton</span></div>
+      </section>
     </section>
 
     <section class="method-notes">
       <div class="section-kicker"><span>01</span><span class="kicker-line"></span><span>COMO COMPARAR OS MÉTODOS</span></div>
       <div class="notes-grid">
         <article class="note-card"><span class="note-index">I / DIRETO</span><h3>Resultado de referência</h3><p>A equação quadrática <code>‖o + s·d − c‖² − r² = 0</code> é resolvida diretamente. A menor raiz não negativa fornece a interseção exata.</p></article>
-        <article class="note-card"><span class="note-index">II / APROXIMAÇÃO</span><h3>Estimativa inicial</h3><p>Newton parte da projeção do centro da partícula sobre o raio. Cada marcador no gráfico representa uma estimativa sucessiva de <code>s</code>.</p></article>
-        <article class="note-card"><span class="note-index">III / AVALIAÇÃO</span><h3>Convergência e erro</h3><p>As correções <code>sₙ₊₁ = sₙ − f(sₙ)/f′(sₙ)</code> aproximam a raiz. Compare o número de iterações, o resíduo final e a diferença em relação ao cálculo direto.</p></article>
+        <article class="note-card"><span class="note-index">II / PREDITOR DE ORDEM 0</span><h3>Extrapolação constante</h3><p>Usa como estimativa para o quadro atual o último valor corrigido de <code>s</code>, sem extrapolar sua variação. No primeiro quadro, usa-se a projeção geométrica do centro.</p></article>
+        <article class="note-card"><span class="note-index">III / EULER 1ª ORDEM + NEWTON</span><h3>Extrapolação e correção</h3><p>Euler estima <code>s</code> extrapolando a variação observada nos quadros anteriores. Newton corrige os dois preditores até a raiz de <code>f(s)=0</code>. O gráfico de erro compara cada estimativa e cada resultado corrigido com a referência analítica.</p></article>
       </div>
     </section>
     <footer class="page-footer"><span>CADERNO DE MÉTODOS NUMÉRICOS</span><span>OBSERVAÇÃO · ANÁLISE · COMPARAÇÃO</span><span>HTML / CANVAS / JS</span></footer>

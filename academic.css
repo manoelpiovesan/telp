@@ -47,12 +47,13 @@ body {
 .legend-vector::after { content: ''; position: absolute; right: -1px; top: -3px; border: 4px solid transparent; border-right: 0; border-left: 6px solid #253e59; }
 .legend-line { height: 0; border-top: 1.5px dashed #82918b; background: transparent; }
 .legend-exact { background: #3b8179; }
-.legend-newton { background: #bd684f; }
+.legend-order0 { background: #8a6c9f; }
+.legend-euler { background: #355f84; }
 .board-note { color: #82908b; }
 .metrics-grid { gap: 10px; }
 .metric-card { background: #fff; border: 1px solid #dce3df; border-radius: 3px; box-shadow: 0 2px 8px #253d3210; }
 .exact-card { border-top: 2px solid #3b8179; }
-.newton-card { border-top: 2px solid #bd684f; }
+.newton-card { border-top: 2px solid #8a6c9f; }
 .error-card { border-top: 2px solid #355f84; }
 .metric-heading { color: #63716d; }
 .metric-icon { color: #46675d; }
@@ -91,7 +92,16 @@ body {
 .plot-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .plot-line { width: 15px; height: 2px; background: #355f84; }
 .plot-zero { width: 8px; height: 8px; border-radius: 50%; background: #3b8179; }
-.plot-iteration { width: 8px; height: 8px; border: 1.5px solid #bd684f; border-radius: 50%; }
+.plot-order0 { width: 8px; height: 8px; border: 1.5px solid #8a6c9f; border-radius: 50%; }
+.plot-euler { width: 8px; height: 8px; border: 1.5px solid #355f84; border-radius: 50%; }
+.error-section { grid-column: 1 / -1; }
+.error-plot-frame { height: 190px; overflow: hidden; border: 1px solid #e3e9e6; background: #fff; }
+#errorPlot { display: block; width: 100%; height: 100%; }
+.error-legend { gap: 12px 20px; }
+.error-swatch { width: 16px; height: 2px; background: #8a6c9f; }
+.error-swatch.euler { background: #355f84; }
+.error-swatch.dashed { height: 0; border-top: 1.5px dashed #8a6c9f; background: transparent; }
+.error-swatch.euler.dashed { border-color: #355f84; }
 .method-notes { margin-top: 33px; }
 .section-kicker { color: #526860; }
 .kicker-line { background: #cbd6d1; }
